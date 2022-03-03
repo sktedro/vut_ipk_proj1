@@ -1,8 +1,10 @@
-/*
+/**
  * @brief Simple HTTP server
  * @author Patrik Skaloš (xskalo01)
  */
 
+
+// Standard libraries
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -10,13 +12,28 @@
 #include <unistd.h>
 #include <string.h>
 
-#define BACKLOG 256
-#define MAX_HEADER_LEN 8096
+// Header files
+#include "hinfosvc.h"
+
 
 /*
- * Construct a HTTP response given status (eg "200 OK") and a response body
+ *
+ * Functions
+ *
+ */
+
+
+/**
+ * @brief Construct a HTTP response given status (eg "200 OK") and a response 
+ * body
+ *
+ * @param status (char *, eg "400 Bad Request")
+ * @param responseBody (char *)
+ * 
+ * @return response as allocated char array
  */
 char *constructResponse(char *status, char *responseBody){
+
   // Get additional response data
   int responseLen = strlen(responseBody);
   char responseLenStr[16];
@@ -41,28 +58,38 @@ char *constructResponse(char *status, char *responseBody){
   return response;
 }
 
-/*
- * Fetch and parse host name
+
+/**
+ * @brief Fetch and parse host name
+ *
+ * @return allocated char array containing the host name
  */
 char *getHostname(){
   char *hostname = malloc(1025);
   hostname[1024] = '\0';
   gethostname(hostname, 1024);
+
   if(hostname[1024] != '\0'){
     fprintf(stderr, "Host name to be returned is too long (longer than 1024 characters). Not serving\n");
     return NULL;
   }
+
   if(!hostname){
     fprintf(stderr, "Could not allocate memory for a response. Not serving\n");
     return NULL;
   }
+
   return hostname;
 }
 
-/*
- * Fetch and parse cpu model
+
+/**
+ * @brief Fetch and parse cpu model
+ *
+ * @return allocated char array containing the cpu model name
  */
 char *getCpuName(){
+
   // Open the /proc/cpuinfo file
   FILE *file = fopen("/proc/cpuinfo", "rb");
   if(!file){
@@ -91,8 +118,10 @@ char *getCpuName(){
     }
   }
 
+  // We can close the file now
   fclose(file);
 
+  // Couldn't find the cpu name
   if(len < 0){
     fprintf(stderr, "Could not retreive CPU information. Not serving\n");
     return NULL;
@@ -107,13 +136,19 @@ char *getCpuName(){
 
   // Parse the line and return only the CPU model
   for(int i = 0; i < len; i++){
+
+    // Copy the rest of the line after the colon
     if(line[i] == ':'){
+
       // Shift by 2 to ignore the ':' and the next space
       i += 2;
+
+      // Copy the characters to the response body
       for(int j = 0; line[i + j] != '\n' && line[i + j] != '\0'; j++){
         responseBody[j] = line[i + j];
         responseBody[j + 1] = '\0';
       }
+
       break;
     }
   }
@@ -121,10 +156,14 @@ char *getCpuName(){
   return responseBody;
 }
 
-/*
- * Fetch and parse cpu load
+
+/**
+ * @brief Fetch and parse cpu load
+ *
+ * @return allocated char array containing cpu load in %
  */
 char *getCpuLoad(){
+
   // Initialize the data to -1
   int data[2][10];
   for(int i = 0; i < 2; i++){
@@ -133,6 +172,7 @@ char *getCpuLoad(){
     }
   }
 
+  // Allocate some memory for a temporary string
   char *tmp = malloc(64);
   if(!tmp){
     fprintf(stderr, "Could not manually allocate a temporary string. Not serving\n");
@@ -203,7 +243,7 @@ char *getCpuLoad(){
     }
   }
 
-  // Calculate the load from retrieved data at two decimal places
+  // Calculate the load from retrieved data and print as a whole number
   int idle[2];
   int total[2] = {0, 0};
   for(int i = 0; i < 2; i++){
@@ -212,16 +252,23 @@ char *getCpuLoad(){
       total[i] += data[i][j];
     }
   }
-  int load = 100 * ((total[1] - total[0]) - (idle[1] - idle[0])) / (total[1] - total[0]);
+  int load = 100 - 100 * (idle[1] - idle[0]) / (total[1] - total[0]);
   snprintf(tmp, 64, "%d%%", load);
   
   return tmp;
 }
 
-/*
- * Get response based on the request header
+
+/**
+ * @brief Get response based on the request header
+ *
+ * @param headerLen (int)
+ * @param header (char *)
+ *
+ * @return response to reply with in an allocated char array
  */
 char *getResponse(int headerLen, char *header){
+
   // Check the beginning of the header
   char headerBeginning[] = "GET /";
   for(int i = 0; i < 5; i++){
@@ -269,6 +316,8 @@ char *getResponse(int headerLen, char *header){
  * Main
  *
  */
+
+
 int main(int argc, char **argv){
 
   // Check the arguments
@@ -278,7 +327,7 @@ int main(int argc, char **argv){
   }
   char *tolptr = NULL;
   int port = strtol(argv[1], &tolptr, 10);
-  if(tolptr[0]){
+  if(tolptr[0] || port < 0 || port > 65535){
     fprintf(stderr, "Could not recognize port %s\n", argv[1]);
     return 1;
   }
@@ -290,7 +339,13 @@ int main(int argc, char **argv){
   int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
 
   // Reuse the address and the port
-  setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &(int){1}, sizeof(int));
+  setsockopt(
+      serverSocket, 
+      SOL_SOCKET, 
+      SO_REUSEADDR | SO_REUSEPORT, 
+      &(int){1}, 
+      sizeof(int)
+      );
 
   // Set up server address
   struct sockaddr_in serverAddr;
@@ -316,6 +371,7 @@ int main(int argc, char **argv){
 
   // Requests accepting loop
   while(1){
+
     // Accept a request
     int client_fd = accept(serverSocket, NULL, NULL);
     if(client_fd == -1){
