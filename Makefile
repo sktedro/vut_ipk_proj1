@@ -13,7 +13,7 @@ test: all
 	./$(TESTSCRIPT) $(PORT)
 
 pack: clean
-	zip $(LOGIN).zip $(SOURCE).c Makefile README.md
+	zip $(LOGIN).zip $(SOURCE).c $(SOURCE).h Makefile README.md
 
 pack_all: clean
 	zip $(SOURCE).zip ./*
